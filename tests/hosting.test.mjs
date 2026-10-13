@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {getAppOrigin} from '../hosting.mjs';
+import {execFileSync} from 'node:child_process';
+import {mkdtempSync,mkdirSync,rmSync,existsSync} from 'node:fs';
+import {join} from 'node:path';
+test('Railway public domain automatically configures a secure origin when APP_ORIGIN is absent',()=>{assert.equal(getAppOrigin({RAILWAY_PUBLIC_DOMAIN:'worklio-test.up.railway.app'},'0.0.0.0',3000),'https://worklio-test.up.railway.app');assert.equal(getAppOrigin({APP_ORIGIN:'  ',RAILWAY_PUBLIC_DOMAIN:'worklio-test.up.railway.app'},'0.0.0.0',3000),'https://worklio-test.up.railway.app');});
+test('explicit HTTPS custom domain takes precedence and trailing slashes are normalized',()=>{assert.equal(getAppOrigin({APP_ORIGIN:' https://worklio.example.com/ ',RAILWAY_PUBLIC_DOMAIN:'worklio.up.railway.app'},'0.0.0.0',3000),'https://worklio.example.com');});
+test('local startup remains available with HTTP',()=>{for(const host of ['localhost','127.0.0.1','::1'])assert.equal(getAppOrigin({},host,3000),'http://localhost:3000');});
+test('hosted configuration rejects missing domains, HTTP overrides and malformed origins',()=>{assert.throws(()=>getAppOrigin({},'0.0.0.0',3000),/generated Railway public domain/);for(const value of ['http://example.com','bad value','https://user:password@example.com','https://example.com/path','https://example.com?query=1','https://example.com#fragment'])assert.throws(()=>getAppOrigin({APP_ORIGIN:value,RAILWAY_PUBLIC_DOMAIN:'worklio.up.railway.app'},'0.0.0.0',3000));});
+test('server boots with Railway-like environment and no APP_ORIGIN, retaining existing database filename',()=>{mkdirSync('.test-temp',{recursive:true});const temp=mkdtempSync(join(process.cwd(),'.test-temp','hosting-'));try{const env={...process.env,HOST:'0.0.0.0',PORT:'3000',RAILWAY_PUBLIC_DOMAIN:'worklio-test.up.railway.app',OBRA_TEST:'1',DATA_DIR:temp,SETUP_TOKEN:'hosting-test-setup-token-32-characters-long'};delete env.APP_ORIGIN;execFileSync(process.execPath,['--input-type=module','-e',"await import('./server.mjs');"],{cwd:process.cwd(),env,stdio:'pipe',timeout:10000});assert.ok(existsSync(join(temp,'obra.sqlite')));}finally{rmSync(temp,{recursive:true,force:true});}});

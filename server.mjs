@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {getAppOrigin} from './hosting.mjs';
 import {createInvoice,editInvoice,finalizeInvoice,deleteInvoice,protectInvoices,invoiceExportData,invoiceSequence} from './invoices.mjs';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,mkdirSync,existsSync,statSync} from 'node:fs';
@@ -14,10 +15,8 @@ const web=resolve(root,'dist');
 const dbPath=resolve(process.env.DATA_DIR||resolve(root,'data'),'obra.sqlite');
 const host=process.env.HOST||'127.0.0.1';
 const port=Number(process.env.PORT||3000);
-const local=['127.0.0.1','localhost','::1'].includes(host);
-const appOrigin=process.env.APP_ORIGIN||`http://localhost:${port}`;
+const appOrigin=getAppOrigin(process.env,host,port);
 const secure=new URL(appOrigin).protocol==='https:';
-if(!local&&(!secure||!process.env.APP_ORIGIN))throw Error('Hosted access requires APP_ORIGIN set to your HTTPS site URL.');
 mkdirSync(dirname(dbPath),{recursive:true});
 const db=new DatabaseSync(dbPath);
 db.exec('PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS workspace (id TEXT PRIMARY KEY, data TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0)');

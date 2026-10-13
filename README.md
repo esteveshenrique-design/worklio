@@ -83,7 +83,7 @@ Passwords use salted scrypt hashes. Sessions use random server-side tokens store
 
 ### Hosted configuration
 
-Set APP_ORIGIN to the exact HTTPS origin, such as https://your-app.example.com (no path or trailing slash), and use HTTPS through your hosting provider’s reverse proxy. Its forwarded Host must match that origin. Set SETUP_TOKEN to a random secret of at least 32 characters before the first launch; use it once in the setup form, then remove it from the service’s environment. Keep the /data volume. The previous APP_USER/APP_PASSWORD settings are no longer used. Do not expose the local HTTP server directly to the internet. Protect access to database backups: they contain business data and account hashes.
+On Railway, generate a public domain under Settings → Networking → Public Networking. Worklio automatically uses `https://` plus Railway’s `RAILWAY_PUBLIC_DOMAIN` when `APP_ORIGIN` is absent. For another provider or an explicit custom domain, set APP_ORIGIN to the exact HTTPS origin, such as https://your-app.example.com (no path). A trailing slash is normalized automatically. Use HTTPS through your hosting provider’s reverse proxy. Its forwarded Host must match that origin. Set SETUP_TOKEN to a random secret of at least 32 characters before the first launch; use it once in the setup form, then remove it from the service’s environment. Keep the /data volume. The previous APP_USER/APP_PASSWORD settings are no longer used. Do not expose the local HTTP server directly to the internet. Protect access to database backups: they contain business data and account hashes.
 
 The current version supports administrator-created credentials and self-service password changes. It does not include MFA, email verification or an email password-reset service. A public production rollout still needs deployment-specific review, HTTPS configuration and operational monitoring.
 
@@ -130,3 +130,6 @@ Invoice lists and previews show Draft or Final. Draft PDF/Excel exports are labe
 
 ## Updating from Obra to Worklio
 Keep the existing `data` folder or Railway `/data` volume when updating. Worklio keeps the database filename `obra.sqlite` and existing session/language identifiers for compatibility, so no data migration or new administrator setup is required. The downloaded project folder is now named `worklio-local`.
+
+## Railway startup error: APP_ORIGIN
+Update the repository with this package, including `server.mjs`, `hosting.mjs` and `Dockerfile`. Ensure your Worklio service has a generated public domain, then redeploy. The domain is detected automatically when APP_ORIGIN is unset. If you previously added APP_ORIGIN with an incorrect or HTTP URL, remove it to use Railway’s domain or replace it with your exact HTTPS site URL. Explicit APP_ORIGIN takes precedence. Keep the existing `/data` volume and other environment variables.
