@@ -1,0 +1,13 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {reusableGroups,addQuoteGroup} from '../.test-render/components/quoteGroups.mjs';
+import QuoteEditor from '../.test-render/components/components/QuoteEditor.mjs';
+import {createElement} from 'react';
+import {renderToString} from 'react-dom/server';
+import {languages,translate} from '../src/translations.mjs';
+const current={id:'new',number:'1',customer:'c',title:'Test',status:'Draft',date:'2026-09-30',tax:23,groups:[{id:'p',name:'Painting'}],lines:[{description:'Work',qty:1,price:100,vat:6}]};
+const saved=[{...current,id:'old1',groups:[{id:'a',name:'Electricity'},{id:'b',name:'Construction'}]},{...current,id:'old2',groups:[{id:'x',name:' electricity '},{id:'y',name:'painting'}]}];
+test('historical groups are deduplicated and current groups remain local',()=>{assert.deepEqual(reusableGroups(saved,current),['Construction','Electricity']);assert.deepEqual(reusableGroups([{...current,groups:[{id:'hidden',name:'Old unsaved name'}]}],current),[]);});
+test('importing assigns a fresh local group ID and preserves other quotes and VAT',()=>{const before=JSON.stringify(saved);const updated=addQuoteGroup(current,'Electricity',0,'fresh');assert.equal(updated.lines[0].groupId,'fresh');assert.equal(updated.lines[0].vat,6);assert.equal(updated.groups[1].name,'Electricity');assert.equal(JSON.stringify(saved),before);assert.equal(current.groups.length,1);});
+test('inline creation reuses existing names and ignores blanks',()=>{const duplicate=addQuoteGroup(current,' PAINTING ',0,'unused');assert.equal(duplicate.groups.length,1);assert.equal(duplicate.lines[0].groupId,'p');assert.equal(addQuoteGroup(current,'  ',null,'id'),current);const added=addQuoteGroup(current,' Roof   repair ',null,'r');assert.equal(added.groups[1].name,'Roof repair');assert.equal(added.lines[0].groupId,undefined);});
+test('all languages display preloaded dropdown groups and inline creation option',()=>{for(const {code} of languages){const t=key=>translate(code,key);const html=renderToString(createElement(QuoteEditor,{quote:current,quotes:saved,setQuote:()=>{},customers:[],t,eur:String,busy:false,ready:true,onSave:async()=>{}}));assert.ok(html.includes('Electricity'));assert.ok(html.includes('Construction'));assert.ok(html.includes(t('Groups from other quotes')));assert.ok(html.includes(t('New group…')));}});

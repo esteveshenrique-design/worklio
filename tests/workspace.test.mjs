@@ -1,0 +1,112 @@
+import {test,after,before} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync,mkdirSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+process.env.OBRA_TEST='1';process.env.SETUP_TOKEN='test-only-setup-token-32-characters-long';process.env.APP_ORIGIN='http://localhost:3000';
+mkdirSync('.test-temp',{recursive:true});
+const temp=mkdtempSync(join(process.cwd(),'.test-temp','obra-test-'));
+
+process.env.DATA_DIR=temp;
+const {server}=await import('../server.mjs');
+let base,cookie,csrf;
+const nativeFetch=globalThis.fetch;
+const fetch=(url,options={})=>nativeFetch(url,{...options,headers:{Host:'localhost:3000',Origin:'http://localhost:3000',Cookie:cookie||'','X-CSRF-Token':csrf||'',...(options.headers||{})}});
+before(async()=>{await new Promise(r=>server.listen(3000,'127.0.0.1',r));base='http://localhost:3000';const r=await fetch(base+'/api/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Admin',email:'admin@example.com',password:'Strong-test-password-123',token:process.env.SETUP_TOKEN})});assert.equal(r.status,201,r.status!==201?await r.text():'');cookie=r.headers.get('set-cookie').split(';')[0];csrf=(await r.json()).csrf;});
+after(async()=>{await new Promise(r=>server.close(r));rmSync(temp,{recursive:true,force:true});});
+const data={business:'Test business',customers:[{id:'c1',name:'Ana'}],jobs:[],quotes:[{id:'q1',title:'Tap repair',tax:23,lines:[{description:'Labour',qty:2,price:50}]}]};
+const put=(version,body=data,extra={})=>fetch(base+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json',...extra},body:JSON.stringify({data:body,version})});
+test('save, read, update and reject stale concurrent write',async()=>{assert.deepEqual(await(await fetch(base+'/api/workspace')).json(),{data:null,version:0});assert.equal((await put(0)).status,200);const saved=await(await fetch(base+'/api/workspace')).json();assert.deepEqual(saved,{data,version:1});assert.equal((await put(0)).status,409);assert.equal((await put(1,{...data,business:'Updated'})).status,200);assert.equal((await put(1)).status,409);assert.equal((await(await fetch(base+'/api/workspace')).json()).data.business,'Updated');});
+test('invalid amounts and cross-site writes preserve stored records',async()=>{assert.equal((await put(2,{...data,quotes:[{...data.quotes[0],tax:-1}]})).status,400);assert.equal((await put(2,data,{Origin:'https://malicious.example'})).status,403);assert.equal((await(await fetch(base+'/api/workspace')).json()).version,2);});
+test('built UI and favicon are served; private server files are not exposed',async()=>{const r=await fetch(base+'/');assert.equal(r.status,200);assert.match(await r.text(),/Worklio/);assert.equal((await fetch(base+'/favicon.svg')).status,200);assert.equal((await fetch(base+'/server.mjs')).status,404);});
+test('mixed VAT and subject groups persist; invalid VAT and group references are rejected',async()=>{const q={...data.quotes[0],groups:[{id:'g',name:'Electricity'}],lines:[{description:'Sockets',qty:1,price:100,vat:6,groupId:'g'},{description:'Labour',qty:1,price:50,vat:23}]};const grouped={...data,quotes:[q]};assert.equal((await put(2,grouped)).status,200);assert.deepEqual((await(await fetch(base+'/api/workspace')).json()).data,grouped);for(const patch of [{vat:-1},{vat:101},{vat:'6'},{groupId:'missing'}]){assert.equal((await put(3,{...grouped,quotes:[{...q,lines:[{...q.lines[0],...patch}]}]})).status,400);}assert.equal((await(await fetch(base+'/api/workspace')).json()).version,3);});
+
+test('company logo persists with business settings; unsupported image sources are rejected',async()=>{const logo='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jX1sAAAAASUVORK5CYII=';const current=await(await fetch(base+'/api/workspace')).json();assert.equal((await put(current.version,{...current.data,logo})).status,200);const saved=await(await fetch(base+'/api/workspace')).json();assert.equal(saved.data.logo,logo);assert.equal((await put(saved.version,{...saved.data,logo:'data:image/svg+xml;base64,PHN2Zz4='})).status,400);assert.equal((await(await fetch(base+'/api/workspace')).json()).data.logo,logo);});
+
+test('typed and selected units persist when saving and reopening budgets',async()=>{const current=await(await fetch(base+'/api/workspace')).json();const next={...current.data,quotes:[{...data.quotes[0],lines:[{description:'Area',qty:2,price:50,unit:'m²'},{description:'Labour',qty:1,price:20,unit:'hour'}]}]};assert.equal((await put(current.version,next)).status,200);const reopened=await(await fetch(base+'/api/workspace')).json();assert.deepEqual(reopened.data.quotes[0].lines.map(line=>line.unit),['m²','hour']);const changed={...reopened.data,quotes:[{...reopened.data.quotes[0],lines:reopened.data.quotes[0].lines.map((line,i)=>({...line,unit:i===0?'kg':''}))}]};assert.equal((await put(reopened.version,changed)).status,200);assert.deepEqual((await(await fetch(base+'/api/workspace')).json()).data.quotes[0].lines.map(line=>line.unit),['kg','']);});
+
+test('quote exports require login and CSRF and return downloadable files',async()=>{const q={...data.quotes[0],number:'QT-001',customer:'c1',date:'2026-10-03'};const payload={data:{...data,quotes:[q]},quoteId:q.id,language:'fr',format:'pdf'};const request=(extra={},b=payload)=>fetch(base+'/api/exports/quote',{method:'POST',headers:{'Content-Type':'application/json',...extra},body:JSON.stringify(b)});assert.equal((await request({Cookie:''})).status,401);assert.equal((await request({'X-CSRF-Token':''})).status,403);const pdf=await request();assert.equal(pdf.status,200);assert.match(pdf.headers.get('content-type'),/application\/pdf/);assert.match(pdf.headers.get('content-disposition'),/QT-001.pdf/);assert.match(Buffer.from(await pdf.arrayBuffer()).subarray(0,5).toString(),/%PDF-/);const excel=await request({}, {...payload,format:'xlsx'});assert.equal(excel.status,200);assert.match(excel.headers.get('content-type'),/spreadsheetml/);assert.equal(Buffer.from(await excel.arrayBuffer()).readUInt32LE(0),0x04034b50);});
+
+test('Excel import requires authentication and CSRF and returns an unsaved draft',async()=>{const {exportExcel}=await import('../exports.mjs');const q={...data.quotes[0],title:'Imported work',number:'QT-1',date:'2026-10-05',customer:'c1'};const bytes=exportExcel({...data,quotes:[q]},q,'fr').toString('base64');const request=extra=>fetch(base+'/api/imports/quote',{method:'POST',headers:{'Content-Type':'application/json',...extra},body:JSON.stringify({file:bytes})});assert.equal((await request({Cookie:''})).status,401);assert.equal((await request({'X-CSRF-Token':''})).status,403);const before=await(await fetch(base+'/api/workspace')).json();const response=await request({});assert.equal(response.status,200);assert.equal((await response.json()).title,'Imported work');assert.deepEqual(await(await fetch(base+'/api/workspace')).json(),before);});
+
+test('import API accepts a full 10 MiB Excel upload including base64 overhead',async()=>{const {exportExcel}=await import('../exports.mjs');const {MAX_IMPORT_BYTES}=await import('../imports.mjs');const q={...data.quotes[0],title:'Large upload',number:'QT-1',date:'2026-10-05',customer:'c1'};const bytes=exportExcel({...data,quotes:[q]},q,'en');const file=Buffer.concat([bytes,Buffer.alloc(MAX_IMPORT_BYTES-bytes.length)]).toString('base64');const response=await fetch(base+'/api/imports/quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file})});assert.equal(response.status,200);assert.equal((await response.json()).title,'Large upload');});
+
+test('only administrators can save, reset or remove application colors',async()=>{const {defaultTheme}=await import('../theme.mjs');const current=await(await fetch(base+'/api/workspace')).json();const theme={...defaultTheme,accent:'#123456'};assert.equal((await put(current.version,{...current.data,theme})).status,200);const saved=await(await fetch(base+'/api/workspace')).json();assert.deepEqual(saved.data.theme,theme);assert.equal((await put(saved.version,{...saved.data,theme:{...theme,accent:'url(https://example.com)'}})).status,400);const added=await fetch(base+'/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Color test',email:'color@example.com',password:'Color-test-password-123',role:'user'})});assert.equal(added.status,201);const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'color@example.com',password:'Color-test-password-123'})});const userCookie=login.headers.get('set-cookie').split(';')[0],userCsrf=(await login.json()).csrf;const headers={Cookie:userCookie,'X-CSRF-Token':userCsrf};for(const value of [defaultTheme,undefined,{...theme,link:'#ffffff'}])assert.equal((await put(saved.version,{...saved.data,theme:value},headers)).status,403);assert.equal((await put(saved.version,{...saved.data,business:'Ordinary user business edit'},headers)).status,200);const after=await(await fetch(base+'/api/workspace')).json();assert.deepEqual(after.data.theme,theme);assert.equal((await put(after.version,{...after.data,theme:defaultTheme})).status,200);});
+
+test('invoice API enforces one-time billing, concurrency, authentication and immutable history',async()=>{
+const api=(path,b,headers={})=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(b)});
+let state=await(await fetch(base+'/api/workspace')).json();const q={...state.data.quotes[0],number:'QT-009',customer:'c1',date:'2026-10-09',status:'Accepted'};
+assert.equal((await put(state.version,{...state.data,quotes:[q]})).status,200);state=await(await fetch(base+'/api/workspace')).json();
+const payload={version:state.version,quoteId:q.id,date:'2026-10-09',lineIndexes:[0],extraLines:[]};
+assert.equal((await api('/api/invoices',payload,{Cookie:''})).status,401);assert.equal((await api('/api/invoices',payload,{'X-CSRF-Token':''})).status,403);
+const results=await Promise.all([api('/api/invoices',payload),api('/api/invoices',payload)]);assert.deepEqual(results.map(r=>r.status).sort(),[201,409]);
+state=await(await fetch(base+'/api/workspace')).json();assert.equal(state.data.invoices.length,1);assert.equal((await api('/api/invoices',{...payload,version:state.version})).status,409);
+assert.equal((await put(state.version,{...state.data,invoices:[]})).status,403);assert.equal((await put(state.version,{...state.data,quotes:[{...q,lines:q.lines.slice().reverse()}]})).status,409);
+const login=await api('/api/auth/login',{email:'color@example.com',password:'Color-test-password-123'});const headers={Cookie:login.headers.get('set-cookie').split(';')[0],'X-CSRF-Token':(await login.json()).csrf};
+const response=await api('/api/invoices',{...payload,version:state.version,lineIndexes:[1],extraLines:[{description:'Extra materials',unit:'unit',qty:1,price:15,vat:6}]},headers);assert.equal(response.status,201);const issued=await response.json();assert.equal(issued.data.invoices.length,2);assert.equal(issued.invoice.lines.length,2);
+for(const format of ['pdf','xlsx']){const exported=await api('/api/exports/invoice',{invoiceId:issued.invoice.id,language:'es',format},headers);assert.equal(exported.status,200);assert.match(exported.headers.get('content-disposition'),/INV-0002/);}assert.equal((await api('/api/exports/invoice',{invoiceId:issued.invoice.id,language:'en',format:'pdf'},{Cookie:''})).status,401);
+});
+
+test('registered users can delete invoices, release quote items and reinvoice with fresh numbers',async()=>{
+const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'color@example.com',password:'Color-test-password-123'})});const userHeaders={Cookie:login.headers.get('set-cookie').split(';')[0],'X-CSRF-Token':(await login.json()).csrf};
+const api=(path,method,b,headers=userHeaders)=>fetch(base+path,{method,headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(b)});
+let state=await(await fetch(base+'/api/workspace')).json();const [first,second]=state.data.invoices;const path='/api/invoices/'+second.id;
+assert.equal((await api(path,'DELETE',{version:state.version},{Cookie:''})).status,401);assert.equal((await api(path,'DELETE',{version:state.version},{...userHeaders,'X-CSRF-Token':''})).status,403);assert.equal((await api(path,'DELETE',{version:state.version-1})).status,409);assert.equal((await api('/api/invoices/missing','DELETE',{version:state.version})).status,404);
+const results=await Promise.all([api(path,'DELETE',{version:state.version}),api(path,'DELETE',{version:state.version})]);assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+state=await(await fetch(base+'/api/workspace')).json();assert.deepEqual(state.data.invoices.map(i=>i.id),[first.id]);assert.equal(state.data.invoiceSequence,2);assert.equal((await api('/api/exports/invoice','POST',{invoiceId:second.id,format:'pdf',language:'en'})).status,404);
+const draft={version:state.version,quoteId:first.quoteId,date:'2026-10-11',lineIndexes:[1],extraLines:[]};assert.equal((await api('/api/invoices','POST',{...draft,lineIndexes:[0]})).status,409);const replaced=await api('/api/invoices','POST',draft);assert.equal(replaced.status,201);const replacement=(await replaced.json()).invoice;assert.equal(replacement.number,'INV-0003');assert.equal(replacement.lines.length,1);
+state=await(await fetch(base+'/api/workspace')).json();assert.equal((await api('/api/invoices/'+first.id,'DELETE',{version:state.version})).status,200);state=await(await fetch(base+'/api/workspace')).json();assert.equal((await api('/api/invoices/'+replacement.id,'DELETE',{version:state.version})).status,200);state=await(await fetch(base+'/api/workspace')).json();assert.equal(state.data.invoices.length,0);assert.equal((await put(state.version,{...state.data,invoiceSequence:0})).status,403);
+const again=await api('/api/invoices','POST',{...draft,version:state.version,lineIndexes:[0,1]});assert.equal(again.status,201);assert.equal((await again.json()).invoice.number,'INV-0004');
+});
+
+test('draft invoice edits and finalization enforce reservations, version checks and server-side final locks',async()=>{
+const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'color@example.com',password:'Color-test-password-123'})});const headers={Cookie:login.headers.get('set-cookie').split(';')[0],'X-CSRF-Token':(await login.json()).csrf};
+const api=(path,method,b,h=headers)=>fetch(base+path,{method,headers:{'Content-Type':'application/json',...h},body:JSON.stringify(b)});
+let state=await(await fetch(base+'/api/workspace')).json();const original=state.data.invoices[0],path='/api/invoices/'+original.id;assert.equal(original.status,'Draft');
+const draft={version:state.version,quoteId:original.quoteId,date:'2026-10-11',lineIndexes:[0],extraLines:[{description:'Added work',qty:1,price:30,vat:6,unit:'hour'}]};
+assert.equal((await api(path,'PUT',draft,{Cookie:''})).status,401);assert.equal((await api(path,'PUT',draft,{...headers,'X-CSRF-Token':''})).status,403);assert.equal((await api(path,'PUT',{...draft,version:state.version-1})).status,409);
+const edits=await Promise.all([api(path,'PUT',draft),api(path,'PUT',draft)]);assert.deepEqual(edits.map(r=>r.status).sort(),[200,409]);const edited=(await edits.find(r=>r.status===200).json()).invoice;assert.equal(edited.number,original.number);assert.equal(edited.id,original.id);assert.equal(edited.lines.length,2);state=await(await fetch(base+'/api/workspace')).json();
+assert.equal((await api('/api/invoices','POST',{...draft,version:state.version,extraLines:[]})).status,409);
+const added=await api('/api/invoices','POST',{...draft,version:state.version,lineIndexes:[1],extraLines:[]});assert.equal(added.status,201);const other=(await added.json()).invoice;state=await(await fetch(base+'/api/workspace')).json();assert.equal((await api(path,'PUT',{...draft,version:state.version,lineIndexes:[0,1]})).status,409);
+assert.equal((await api(path,'PATCH',{version:state.version,action:'finalize'},{...headers,'X-CSRF-Token':''})).status,403);assert.equal((await api(path,'PATCH',{version:state.version-1,action:'finalize'})).status,409);const final=await api(path,'PATCH',{version:state.version,action:'finalize'});assert.equal(final.status,200);assert.equal((await final.json()).invoice.status,'Final');state=await(await fetch(base+'/api/workspace')).json();assert.equal((await api(path,'PUT',{...draft,version:state.version})).status,409);assert.equal((await api(path,'PATCH',{version:state.version,action:'finalize'})).status,409);
+assert.equal((await put(state.version,{...state.data,invoices:state.data.invoices.map(i=>i.id===original.id?{...i,status:'Draft'}:i)})).status,403);
+assert.equal((await api(path,'DELETE',{version:state.version})).status,200);state=await(await fetch(base+'/api/workspace')).json();assert.deepEqual(state.data.invoices.map(i=>i.id),[other.id]);assert.equal((await api('/api/invoices','POST',{...draft,version:state.version,extraLines:[]})).status,201);
+});
+
+test('authentication, admin roles, disable/re-enable, CSRF and logout are enforced',async()=>{
+ const api=(path,method='GET',body,extra={})=>fetch(base+path,{method,headers:{'Content-Type':'application/json',...extra},...(body?{body:JSON.stringify(body)}:{})});
+ assert.equal((await api('/api/workspace','GET',null,{Cookie:''})).status,401);
+ assert.equal((await api('/api/users','GET',null,{Cookie:''})).status,401);
+ assert.equal((await api('/api/users','POST',{name:'x'}, {'X-CSRF-Token':''})).status,403);
+ assert.equal((await api('/api/auth/setup','POST',{})).status,403);
+ const added=await api('/api/users','POST',{name:'Employee',email:'employee@example.com',password:'Employee-password-123',role:'user'});assert.equal(added.status,201);const id=(await added.json()).user.id;
+ assert.equal((await api('/api/users','POST',{name:'Duplicate',email:'EMPLOYEE@example.com',password:'Employee-password-123',role:'user'})).status,409);
+ const adminStatus=await(await api('/api/auth/status')).json();assert.equal((await api('/api/users/'+adminStatus.user.id,'PATCH',{enabled:false})).status,400);
+ const login=await api('/api/auth/login','POST',{email:'employee@example.com',password:'Employee-password-123'});assert.equal(login.status,200);assert.match(login.headers.get('set-cookie'),/HttpOnly/);assert.match(login.headers.get('set-cookie'),/SameSite=Strict/);const employeeCookie=login.headers.get('set-cookie').split(';')[0],employeeCsrf=(await login.json()).csrf;
+ assert.equal((await api('/api/users','GET',null,{Cookie:employeeCookie})).status,403);
+ assert.equal((await api('/api/workspace','GET',null,{Cookie:employeeCookie})).status,200);
+ assert.equal((await api('/api/users/'+id,'PATCH',{enabled:false})).status,200);
+ assert.equal((await api('/api/workspace','GET',null,{Cookie:employeeCookie})).status,401);
+ assert.equal((await api('/api/auth/login','POST',{email:'employee@example.com',password:'Employee-password-123'})).status,401);
+ assert.equal((await api('/api/users/'+id,'PATCH',{enabled:true})).status,200);
+ assert.equal((await api('/api/workspace','GET',null,{Cookie:employeeCookie})).status,401);
+ const login2=await api('/api/auth/login','POST',{email:'employee@example.com',password:'Employee-password-123'});assert.equal(login2.status,200);const cookie2=login2.headers.get('set-cookie').split(';')[0],csrf2=(await login2.json()).csrf;
+ assert.equal((await api('/api/auth/password','POST',{currentPassword:'Employee-password-123',password:'Replacement-password-123'},{Cookie:cookie2,'X-CSRF-Token':csrf2})).status,200);
+ assert.equal((await api('/api/workspace','GET',null,{Cookie:cookie2})).status,401);
+ const editLogin=await api('/api/auth/login','POST',{email:'employee@example.com',password:'Replacement-password-123'});const editCookie=editLogin.headers.get('set-cookie').split(';')[0],editCsrf=(await editLogin.json()).csrf;
+ assert.equal((await api('/api/users/'+id,'PATCH',{name:'Unauthorized'},{Cookie:editCookie,'X-CSRF-Token':editCsrf})).status,403);
+ assert.equal((await api('/api/users/'+id,'PATCH',{name:'Updated Employee'})).status,200);
+ assert.equal((await api('/api/workspace','GET',null,{Cookie:editCookie})).status,200);
+ assert.equal((await api('/api/users/'+id,'PATCH',{email:'admin@example.com'})).status,409);
+ assert.equal((await api('/api/users/'+id,'PATCH',{role:'owner'})).status,400);
+ assert.equal((await api('/api/users/'+id,'PATCH',{password:'short'})).status,400);
+ assert.equal((await api('/api/users/'+adminStatus.user.id,'PATCH',{role:'user'})).status,400);
+ assert.equal((await api('/api/users/'+id,'PATCH',{email:'edited@example.com',role:'admin',password:'Edited-password-12345'})).status,200);
+ assert.equal((await api('/api/workspace','GET',null,{Cookie:editCookie})).status,401);
+ assert.equal((await api('/api/auth/login','POST',{email:'employee@example.com',password:'Replacement-password-123'})).status,401);
+ const editedLogin=await api('/api/auth/login','POST',{email:'edited@example.com',password:'Edited-password-12345'});assert.equal(editedLogin.status,200);const editedCookie=editedLogin.headers.get('set-cookie').split(';')[0];const editedUser=(await editedLogin.json()).user;assert.equal(editedUser.name,'Updated Employee');assert.equal(editedUser.role,'admin');assert.equal((await api('/api/users','GET',null,{Cookie:editedCookie})).status,200);
+ assert.equal((await api('/api/users/'+id,'PATCH',{role:'user'})).status,200);
+ assert.equal((await api('/api/users','GET',null,{Cookie:editedCookie})).status,401);
+ assert.equal((await api('/api/auth/logout','POST',{})).status,200);
+ assert.equal((await api('/api/workspace')).status,401);
+});
