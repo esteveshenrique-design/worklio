@@ -1,5 +1,22 @@
 export const languages = [{code:'en',label:'English',locale:'en-GB'},{code:'pt',label:'Português',locale:'pt-PT'},{code:'fr',label:'Français',locale:'fr-FR'},{code:'es',label:'Español',locale:'es-ES'}];
-const rows = `Final|Final|Définitive|Final
+const rows = `Organizations|Organizações|Organisations|Organizaciones
+Super administrator|Super administrador|Super administrateur|Superadministrador
+Organization administrator|Administrador da organização|Administrateur de l’organisation|Administrador de la organización
+Create organization|Criar organização|Créer une organisation|Crear organización
+Switch organization|Mudar de organização|Changer d’organisation|Cambiar de organización
+Current organization|Organização atual|Organisation actuelle|Organización actual
+Refresh organizations|Atualizar organizações|Actualiser les organisations|Actualizar organizaciones
+Create or select an organization in Settings.|Crie ou selecione uma organização nas Definições.|Créez ou sélectionnez une organisation dans les Paramètres.|Cree o seleccione una organización en Configuración.
+Organization settings are managed by your administrator.|As definições da organização são geridas pelo seu administrador.|Les paramètres de l’organisation sont gérés par votre administrateur.|Su administrador gestiona la configuración de la organización.
+Super administrator access required.|É necessário acesso de super administrador.|Accès super administrateur requis.|Se requiere acceso de superadministrador.
+Organization not found.|Organização não encontrada.|Organisation introuvable.|Organización no encontrada.
+This organization is disabled.|Esta organização está desativada.|Cette organisation est désactivée.|Esta organización está deshabilitada.
+Invalid organization status.|Estado da organização inválido.|Statut de l’organisation invalide.|Estado de organización no válido.
+Organization access denied.|Acesso à organização negado.|Accès à l’organisation refusé.|Acceso a la organización denegado.
+Organization changed. Reload before continuing.|A organização mudou. Atualize antes de continuar.|L’organisation a changé. Actualisez avant de continuer.|La organización ha cambiado. Recargue antes de continuar.
+Only administrators can change organization settings.|Só os administradores podem alterar as definições da organização.|Seuls les administrateurs peuvent modifier les paramètres de l’organisation.|Solo los administradores pueden cambiar la configuración de la organización.
+Enter valid organization settings.|Introduza definições válidas para a organização.|Saisissez des paramètres d’organisation valides.|Introduzca una configuración válida de la organización.
+Final|Final|Définitive|Final
 DRAFT INVOICE|FATURA PROVISÓRIA|PROJET DE FACTURE|FACTURA BORRADOR
 Save invoice|Guardar fatura|Enregistrer la facture|Guardar factura
 Edit invoice|Editar fatura|Modifier la facture|Editar factura

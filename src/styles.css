@@ -78,3 +78,5 @@ nav button{cursor:pointer}nav button:hover,nav button:focus-visible{background:v
 
 .table-scroll{overflow:auto}.invoice-choice.group-heading{background:var(--app-secondary);color:var(--secondary-ink)}
 .invoice-delete-confirm{flex:1 0 100%;padding:8px;border:1px solid var(--app-border);border-radius:6px}.invoice-delete-confirm p{margin:0 0 8px;font-size:12px}.invoice-delete-confirm button+button{margin-left:8px!important}
+
+.organization-settings h3{margin-top:16px}.organization-settings>h3{margin-top:0}.organization-settings .theme-grid{margin:12px 0 20px}.organization-settings .theme-grid input[type=color]{height:36px;padding:3px}.organization-settings .user-row small{display:block;margin-top:6px}

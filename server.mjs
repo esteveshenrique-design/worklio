@@ -31,51 +31,53 @@ const path=new URL(req.url,'http://localhost').pathname;
 if(path==='/health'){return json(res,200,{ok:true});}
 const requestOrigin=new URL(appOrigin);
 if(req.headers.host!==requestOrigin.host) return json(res,403,{error:'Request host rejected.'});
-if(path.startsWith('/api/auth/')||path.startsWith('/api/users'))return await auth.route(req,res,path,body,json);
+if(path.startsWith('/api/auth/')||path.startsWith('/api/users')||path.startsWith('/api/organizations'))return await auth.route(req,res,path,body,json);
 if(path.startsWith('/api/')&&!auth.current(req))return json(res,401,{error:'Sign in to continue.'});
 if(path.startsWith('/api/')&&!['GET','HEAD'].includes(req.method))auth.writeGuard(req,auth.current(req));
-if(path==='/api/imports/quote'&&req.method==='POST'){const b=await body(req,Math.ceil(MAX_IMPORT_BYTES/3)*4+1024);if(typeof b.file!=='string'||b.file.length>Math.ceil(MAX_IMPORT_BYTES/3)*4||!/^[A-Za-z0-9+/]+={0,2}$/.test(b.file))return json(res,400,{error:'Use an Excel file exported by this application with valid item quantities, prices and VAT.'});return json(res,200,importExcel(Buffer.from(b.file,'base64')));}
+const tenantId=path.startsWith('/api/')?auth.workspaceUser(req).active_organization_id:null;
+const scopeUser=()=>{const user=auth.workspaceUser(req,tenantId);if(!['GET','HEAD'].includes(req.method))auth.writeGuard(req,user);return user;};
+if(path==='/api/imports/quote'&&req.method==='POST'){const b=await body(req,Math.ceil(MAX_IMPORT_BYTES/3)*4+1024);scopeUser();if(typeof b.file!=='string'||b.file.length>Math.ceil(MAX_IMPORT_BYTES/3)*4||!/^[A-Za-z0-9+/]+={0,2}$/.test(b.file))return json(res,400,{error:'Use an Excel file exported by this application with valid item quantities, prices and VAT.'});return json(res,200,importExcel(Buffer.from(b.file,'base64')));}
 if(path==='/api/exports/quote'&&req.method==='POST'){
-const b=await body(req);if(!auth.current(req))return json(res,401,{error:'Sign in to continue.'});
-if(!valid(b.data)||!['pdf','xlsx'].includes(b.format)||!['en','pt','fr','es'].includes(b.language))return json(res,400,{error:'Invalid workspace'});
-const q=b.data.quotes.find(q=>q.id===b.quoteId);if(!q)return json(res,404,{error:'Not found'});
-const buffer=b.format==='pdf'?await exportPdf(b.data,q,b.language):exportExcel(b.data,q,b.language);
-if(!auth.current(req))return json(res,401,{error:'Sign in to continue.'});
+const b=await body(req);scopeUser();
+if(!['pdf','xlsx'].includes(b.format)||!['en','pt','fr','es'].includes(b.language))return json(res,400,{error:'Invalid workspace'});
+const saved=db.prepare('SELECT data FROM workspace WHERE id=?').get(tenantId),data=saved?JSON.parse(saved.data):null;const q=data?.quotes.find(q=>q.id===b.quoteId);if(!q)return json(res,404,{error:'Not found'});
+const buffer=b.format==='pdf'?await exportPdf(data,q,b.language):exportExcel(data,q,b.language);
+scopeUser();
 res.writeHead(200,{'Content-Type':b.format==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="${String(q.number||'quote').replace(/[^a-zA-Z0-9_-]/g,'_')}.${b.format}"`,'Cache-Control':'no-store'});return res.end(buffer);
 }
 if(path==='/api/invoices'&&req.method==='POST'){
-const b=await body(req),row=db.prepare('SELECT data,version FROM workspace WHERE id=?').get('owner');
+const b=await body(req),row=db.prepare('SELECT data,version FROM workspace WHERE id=?').get(tenantId);
 if(!row||b.version!==row.version)return json(res,409,{error:'This workspace changed in another tab. Reload before saving.'});
-if(!auth.current(req))return json(res,401,{error:'Sign in to continue.'});
-const data=JSON.parse(row.data),invoice=createInvoice(data,b,auth.current(req));data.invoices=[...(data.invoices||[]),invoice];data.invoiceSequence=invoiceSequence(data);
-const changed=db.prepare('UPDATE workspace SET data=?,version=version+1 WHERE id=? AND version=?').run(JSON.stringify(data),'owner',b.version);
+scopeUser();
+const data=JSON.parse(row.data),invoice=createInvoice(data,b,scopeUser());data.invoices=[...(data.invoices||[]),invoice];data.invoiceSequence=invoiceSequence(data);
+const changed=db.prepare('UPDATE workspace SET data=?,version=version+1 WHERE id=? AND version=?').run(JSON.stringify(data),tenantId,b.version);
 if(!changed.changes)return json(res,409,{error:'This workspace changed in another tab. Reload before saving.'});return json(res,201,{data,version:b.version+1,invoice});
 }
 if(path.startsWith('/api/invoices/')&&['PUT','PATCH'].includes(req.method)){
-const b=await body(req);if(!auth.current(req))return json(res,401,{error:'Sign in to continue.'});
-const row=db.prepare('SELECT data,version FROM workspace WHERE id=?').get('owner');if(!row||b.version!==row.version)return json(res,409,{error:'This workspace changed in another tab. Reload before saving.'});
+const b=await body(req);scopeUser();
+const row=db.prepare('SELECT data,version FROM workspace WHERE id=?').get(tenantId);if(!row||b.version!==row.version)return json(res,409,{error:'This workspace changed in another tab. Reload before saving.'});
 if(req.method==='PATCH'&&b.action!=='finalize')return json(res,400,{error:'Invalid workspace'});
-const data=JSON.parse(row.data),id=decodeURIComponent(path.slice('/api/invoices/'.length)),invoice=req.method==='PUT'?editInvoice(data,id,b,auth.current(req)):finalizeInvoice(data,id,auth.current(req));data.invoices=data.invoices.map(i=>i.id===id?invoice:i);
-const changed=db.prepare('UPDATE workspace SET data=?,version=version+1 WHERE id=? AND version=?').run(JSON.stringify(data),'owner',b.version);if(!changed.changes)return json(res,409,{error:'This workspace changed in another tab. Reload before saving.'});return json(res,200,{data,version:b.version+1,invoice});
+const data=JSON.parse(row.data),id=decodeURIComponent(path.slice('/api/invoices/'.length)),invoice=req.method==='PUT'?editInvoice(data,id,b,scopeUser()):finalizeInvoice(data,id,scopeUser());data.invoices=data.invoices.map(i=>i.id===id?invoice:i);
+const changed=db.prepare('UPDATE workspace SET data=?,version=version+1 WHERE id=? AND version=?').run(JSON.stringify(data),tenantId,b.version);if(!changed.changes)return json(res,409,{error:'This workspace changed in another tab. Reload before saving.'});return json(res,200,{data,version:b.version+1,invoice});
 }
 if(path.startsWith('/api/invoices/')&&req.method==='DELETE'){
-const b=await body(req);if(!auth.current(req))return json(res,401,{error:'Sign in to continue.'});
-const row=db.prepare('SELECT data,version FROM workspace WHERE id=?').get('owner');
+const b=await body(req);scopeUser();
+const row=db.prepare('SELECT data,version FROM workspace WHERE id=?').get(tenantId);
 if(!row||b.version!==row.version)return json(res,409,{error:'This workspace changed in another tab. Reload before saving.'});
 const data=deleteInvoice(JSON.parse(row.data),decodeURIComponent(path.slice('/api/invoices/'.length)));
-const changed=db.prepare('UPDATE workspace SET data=?,version=version+1 WHERE id=? AND version=?').run(JSON.stringify(data),'owner',b.version);
+const changed=db.prepare('UPDATE workspace SET data=?,version=version+1 WHERE id=? AND version=?').run(JSON.stringify(data),tenantId,b.version);
 if(!changed.changes)return json(res,409,{error:'This workspace changed in another tab. Reload before saving.'});return json(res,200,{data,version:b.version+1});
 }
 if(path==='/api/exports/invoice'&&req.method==='POST'){
-const b=await body(req);if(!['pdf','xlsx'].includes(b.format)||!['en','pt','fr','es'].includes(b.language))return json(res,400,{error:'Invalid workspace'});
-const row=db.prepare('SELECT data FROM workspace WHERE id=?').get('owner'),invoice=row&&(JSON.parse(row.data).invoices||[]).find(i=>i.id===b.invoiceId);if(!invoice)return json(res,404,{error:'Not found'});
+const b=await body(req);scopeUser();if(!['pdf','xlsx'].includes(b.format)||!['en','pt','fr','es'].includes(b.language))return json(res,400,{error:'Invalid workspace'});
+const row=db.prepare('SELECT data FROM workspace WHERE id=?').get(tenantId),invoice=row&&(JSON.parse(row.data).invoices||[]).find(i=>i.id===b.invoiceId);if(!invoice)return json(res,404,{error:'Not found'});
 const data=invoiceExportData(invoice),buffer=b.format==='pdf'?await exportPdf(data,invoice,b.language):exportExcel(data,invoice,b.language);
-if(!auth.current(req))return json(res,401,{error:'Sign in to continue.'});
+scopeUser();
 res.writeHead(200,{'Content-Type':b.format==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="${invoice.number}.${b.format}"`,'Cache-Control':'no-store'});return res.end(buffer);
 }
 if(path==='/api/workspace'){
-if(req.method==='GET'){const row=db.prepare('SELECT data,version FROM workspace WHERE id=?').get('owner');return json(res,200,row?{data:JSON.parse(row.data),version:row.version}:{data:null,version:0});}
-if(req.method==='PUT'){if(req.headers.origin){let origin;try{origin=new URL(req.headers.origin);}catch{return json(res,403,{error:'Invalid origin'});}if(origin.host!==req.headers.host)return json(res,403,{error:'Cross-site write blocked'});}if(!(req.headers['content-type']||'').startsWith('application/json'))return json(res,415,{error:'JSON required'});const b=await body(req);if(!auth.current(req))return json(res,401,{error:'Sign in to continue.'});if(!Number.isInteger(b.version)||b.version<0||!valid(b.data))return json(res,400,{error:'Invalid workspace'});const previous=db.prepare('SELECT data FROM workspace WHERE id=?').get('owner');protectInvoices(previous?JSON.parse(previous.data):null,b.data);if(auth.current(req).role!=='admin'&&themeKey(b.data.theme)!==themeKey(previous?JSON.parse(previous.data).theme:undefined))return json(res,403,{error:'Only administrators can change application colors.'});const changes=b.version===0?db.prepare('INSERT INTO workspace (id,data,version) VALUES (?,?,1) ON CONFLICT(id) DO NOTHING').run('owner',JSON.stringify(b.data)):db.prepare('UPDATE workspace SET data=?,version=version+1 WHERE id=? AND version=?').run(JSON.stringify(b.data),'owner',b.version);if(!changes.changes)return json(res,409,{error:'This workspace changed in another tab. Reload before saving.'});return json(res,200,{version:b.version+1});}
+if(req.method==='GET'){const row=db.prepare('SELECT data,version FROM workspace WHERE id=?').get(tenantId);return json(res,200,row?{data:JSON.parse(row.data),version:row.version}:{data:JSON.parse(db.prepare('SELECT settings FROM organizations WHERE id=?').get(tenantId).settings),version:0});}
+if(req.method==='PUT'){if(req.headers.origin){let origin;try{origin=new URL(req.headers.origin);}catch{return json(res,403,{error:'Invalid origin'});}if(origin.host!==req.headers.host)return json(res,403,{error:'Cross-site write blocked'});}if(!(req.headers['content-type']||'').startsWith('application/json'))return json(res,415,{error:'JSON required'});const b=await body(req);scopeUser();if(!Number.isInteger(b.version)||b.version<0||!valid(b.data))return json(res,400,{error:'Invalid workspace'});const previous=db.prepare('SELECT data FROM workspace WHERE id=?').get(tenantId);protectInvoices(previous?JSON.parse(previous.data):null,b.data);const actor=scopeUser(),old=previous?JSON.parse(previous.data):JSON.parse(db.prepare('SELECT settings FROM organizations WHERE id=?').get(tenantId).settings);if(actor.role!=='admin'&&!actor.is_super){if(themeKey(b.data.theme)!==themeKey(old.theme))return json(res,403,{error:'Only administrators can change application colors.'});if(['business','email','phone','logo','address','vatId','registration','paymentTerms','bankDetails'].some(k=>JSON.stringify(b.data[k])!==JSON.stringify(old[k])))return json(res,403,{error:'Only administrators can change organization settings.'});}const changes=b.version===0?db.prepare('INSERT INTO workspace (id,data,version) VALUES (?,?,1) ON CONFLICT(id) DO NOTHING').run(tenantId,JSON.stringify(b.data)):db.prepare('UPDATE workspace SET data=?,version=version+1 WHERE id=? AND version=?').run(JSON.stringify(b.data),tenantId,b.version);if(!changes.changes)return json(res,409,{error:'This workspace changed in another tab. Reload before saving.'});db.prepare('UPDATE organizations SET name=? WHERE id=?').run(b.data.business,tenantId);return json(res,200,{version:b.version+1});}
 return json(res,405,{error:'Method not allowed'});
 }
 if(!['GET','HEAD'].includes(req.method))return json(res,405,{error:'Method not allowed'});
