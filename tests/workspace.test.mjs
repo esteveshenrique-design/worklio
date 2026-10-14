@@ -73,6 +73,11 @@ assert.equal((await put(state.version,{...state.data,invoices:state.data.invoice
 assert.equal((await api(path,'DELETE',{version:state.version})).status,200);state=await(await fetch(base+'/api/workspace')).json();assert.deepEqual(state.data.invoices.map(i=>i.id),[other.id]);assert.equal((await api('/api/invoices','POST',{...draft,version:state.version,extraLines:[]})).status,201);
 });
 
+test('DEVIS-layout uploads produce an unsaved grouped draft in the active organization',async()=>{
+const {zip}=await import('../zip.mjs');const cells=(r,values)=>'<row r="'+r+'">'+Object.entries(values).map(([c,v])=>'<c r="'+c+r+'"'+(typeof v==='number'?'':' t="inlineStr"')+'>'+(typeof v==='number'?'<v>'+v+'</v>':'<is><t>'+v+'</t></is>')+'</c>').join('')+'</row>';
+const xml='<worksheet><sheetData>'+cells(1,{B:'N°',C:'Désignation',D:'U',E:'Qte',F:'P.U.',G:'Montant HT',H:'Totaux HT'})+cells(2,{B:'1',C:'LOT PAINTING'})+cells(3,{B:'1-01',C:'Painting',D:'m²',E:2,F:25,G:50})+cells(4,{F:'TOTAL H.T.',H:50})+cells(5,{F:'T.V.A.',G:.2,H:10})+'</sheetData></worksheet>';const file=zip(new Map([['xl/worksheets/sheet1.xml',Buffer.from(xml)]])).toString('base64');const before=await(await fetch(base+'/api/workspace')).json();const response=await fetch(base+'/api/imports/quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file})});assert.equal(response.status,200);const imported=await response.json();assert.equal(imported.lines[0].unit,'m²');assert.equal(imported.lines[0].vat,20);assert.equal(imported.groups[0].name,'LOT PAINTING');assert.equal(imported.review.sourceSubtotal,50);assert.deepEqual(await(await fetch(base+'/api/workspace')).json(),before);
+});
+
 test('authentication, admin roles, disable/re-enable, CSRF and logout are enforced',async()=>{
  const api=(path,method='GET',body,extra={})=>fetch(base+path,{method,headers:{'Content-Type':'application/json',...extra},...(body?{body:JSON.stringify(body)}:{})});
  assert.equal((await api('/api/workspace','GET',null,{Cookie:''})).status,401);

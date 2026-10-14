@@ -1,5 +1,22 @@
 export const languages = [{code:'en',label:'English',locale:'en-GB'},{code:'pt',label:'Português',locale:'pt-PT'},{code:'fr',label:'Français',locale:'fr-FR'},{code:'es',label:'Español',locale:'es-ES'}];
-const rows = `Organizations|Organizações|Organisations|Organizaciones
+const rows = `Row|Linha|Ligne|Fila
+Stored amount|Montante no ficheiro|Montant du fichier|Importe del archivo
+Calculated amount|Montante calculado|Montant calculé|Importe calculado
+Derived unit price|Preço unitário calculado|Prix unitaire calculé|Precio unitario calculado
+Amounts need review|Os montantes precisam de revisão|Montants à vérifier|Los importes requieren revisión
+VAT needs review|O IVA precisa de revisão|TVA à vérifier|El IVA requiere revisión
+Use a Worklio export or a supported DEVIS Excel layout with valid item quantities, prices and VAT.|Utilize um ficheiro exportado pelo Worklio ou um formato DEVIS suportado com quantidades, preços e IVA válidos.|Utilisez un export Worklio ou un modèle DEVIS pris en charge avec des quantités, prix et TVA valides.|Utilice una exportación de Worklio o un formato DEVIS compatible con cantidades, precios e IVA válidos.
+Review Excel import|Rever importação Excel|Vérifier l’import Excel|Revisar importación de Excel
+Review the draft before saving. Subtotals and document footers are not imported as items.|Reveja o rascunho antes de guardar. Os subtotais e rodapés não são importados como artigos.|Vérifiez le brouillon avant d’enregistrer. Les sous-totaux et pieds de page ne sont pas importés comme articles.|Revise el borrador antes de guardar. Los subtotales y pies de página no se importan como artículos.
+Rows without a line amount were not imported.|As linhas sem montante não foram importadas.|Les lignes sans montant n’ont pas été importées.|Las filas sin importe no se importaron.
+Unpriced rows were not imported.|As linhas sem preço não foram importadas.|Les lignes sans prix n’ont pas été importées.|Las filas sin precio no se importaron.
+Zero-quantity rows were not imported.|As linhas com quantidade zero não foram importadas.|Les lignes de quantité nulle n’ont pas été importées.|Las filas con cantidad cero no se importaron.
+Missing unit prices were derived from the stored amount and quantity.|Os preços unitários em falta foram calculados a partir do montante e da quantidade.|Les prix unitaires manquants ont été calculés à partir du montant et de la quantité.|Los precios unitarios ausentes se calcularon a partir del importe y la cantidad.
+Stored amounts differ from quantity times price. The entered quantities and unit prices were kept.|Os montantes diferem da quantidade multiplicada pelo preço. As quantidades e preços unitários indicados foram mantidos.|Les montants diffèrent de la quantité multipliée par le prix. Les quantités et prix unitaires saisis ont été conservés.|Los importes difieren de la cantidad por el precio. Se conservaron las cantidades y precios unitarios indicados.
+No VAT rate was found. VAT is set to zero; set the correct rate before saving.|Não foi encontrada uma taxa de IVA. O IVA está a zero; indique a taxa correta antes de guardar.|Aucun taux de TVA trouvé. La TVA est à zéro ; indiquez le taux correct avant d’enregistrer.|No se encontró un tipo de IVA. El IVA está a cero; indique el tipo correcto antes de guardar.
+Source subtotal|Subtotal do ficheiro|Sous-total du fichier|Subtotal del archivo
+Imported subtotal|Subtotal importado|Sous-total importé|Subtotal importado
+Organizations|Organizações|Organisations|Organizaciones
 Super administrator|Super administrador|Super administrateur|Superadministrador
 Organization administrator|Administrador da organização|Administrateur de l’organisation|Administrador de la organización
 Create organization|Criar organização|Créer une organisation|Crear organización

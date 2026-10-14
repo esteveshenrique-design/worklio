@@ -2,3 +2,5 @@ export type Customer={id:string,name:string,email:string,phone:string,address:st
 export type Translate=(key:string)=>string;
 
 export type Invoice=Quote & {documentType:"invoice",quoteId:string,quoteNumber:string,extraGroupId?:string,sourceLineIndexes:number[],createdBy:string,createdAt:string,customerSnapshot:Customer,businessSnapshot:Partial<Data>};
+
+export type ImportReview={amountDifferences?:{row:number;description:string;source:number;calculated:number}[];derivedPriceItems?:{row:number;description:string;price:number}[];skippedNoAmount:number;skippedUnpriced:number;skippedZeroQuantity:number;derivedPrices:number;mismatchedAmounts:number;vatMissing:boolean;sourceSubtotal:number|null;importedSubtotal:number};

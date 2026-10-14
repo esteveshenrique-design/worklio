@@ -36,7 +36,7 @@ if(path.startsWith('/api/')&&!auth.current(req))return json(res,401,{error:'Sign
 if(path.startsWith('/api/')&&!['GET','HEAD'].includes(req.method))auth.writeGuard(req,auth.current(req));
 const tenantId=path.startsWith('/api/')?auth.workspaceUser(req).active_organization_id:null;
 const scopeUser=()=>{const user=auth.workspaceUser(req,tenantId);if(!['GET','HEAD'].includes(req.method))auth.writeGuard(req,user);return user;};
-if(path==='/api/imports/quote'&&req.method==='POST'){const b=await body(req,Math.ceil(MAX_IMPORT_BYTES/3)*4+1024);scopeUser();if(typeof b.file!=='string'||b.file.length>Math.ceil(MAX_IMPORT_BYTES/3)*4||!/^[A-Za-z0-9+/]+={0,2}$/.test(b.file))return json(res,400,{error:'Use an Excel file exported by this application with valid item quantities, prices and VAT.'});return json(res,200,importExcel(Buffer.from(b.file,'base64')));}
+if(path==='/api/imports/quote'&&req.method==='POST'){const b=await body(req,Math.ceil(MAX_IMPORT_BYTES/3)*4+1024);scopeUser();if(typeof b.file!=='string'||b.file.length>Math.ceil(MAX_IMPORT_BYTES/3)*4||!/^[A-Za-z0-9+/]+={0,2}$/.test(b.file))return json(res,400,{error:'Use a Worklio export or a supported DEVIS Excel layout with valid item quantities, prices and VAT.'});return json(res,200,importExcel(Buffer.from(b.file,'base64')));}
 if(path==='/api/exports/quote'&&req.method==='POST'){
 const b=await body(req);scopeUser();
 if(!['pdf','xlsx'].includes(b.format)||!['en','pt','fr','es'].includes(b.language))return json(res,400,{error:'Invalid workspace'});
