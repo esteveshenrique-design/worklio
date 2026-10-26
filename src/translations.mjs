@@ -1,5 +1,6 @@
 export const languages = [{code:'en',label:'English',locale:'en-GB'},{code:'pt',label:'Português',locale:'pt-PT'},{code:'fr',label:'Français',locale:'fr-FR'},{code:'es',label:'Español',locale:'es-ES'}];
-const rows = `Row|Linha|Ligne|Fila
+const rows = `Quotes, jobs, and invoices for construction|Orçamentos, obras e faturas para a construção|Devis, chantiers et factures pour le bâtiment|Presupuestos, obras y facturas para la construcción
+Row|Linha|Ligne|Fila
 Stored amount|Montante no ficheiro|Montant du fichier|Importe del archivo
 Calculated amount|Montante calculado|Montant calculé|Importe calculado
 Derived unit price|Preço unitário calculado|Prix unitaire calculé|Precio unitario calculado

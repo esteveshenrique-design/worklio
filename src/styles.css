@@ -84,3 +84,8 @@ nav button{cursor:pointer}nav button:hover,nav button:focus-visible{background:v
 .import-review{padding:10px;border:1px solid var(--app-border);border-radius:6px;background:var(--app-surface);margin-bottom:12px;font-size:12px}.import-review summary{cursor:pointer;font-weight:700}.import-review p{margin-top:8px}.import-review ul{padding-left:20px}
 
 .editor-modal .vat-line .item-description{font:inherit;font-size:13px;line-height:1.4;padding:7px;min-height:36px;max-height:140px;resize:vertical;width:100%;border:1px solid var(--app-border);border-radius:7px;background:var(--app-surface);color:var(--app-text)}
+
+/* Application identity; customer logos remain independent. */
+.application-icon{display:block;flex-shrink:0;object-fit:contain}.auth-brand{display:flex;align-items:center;gap:12px}
+
+.application-tagline{font-size:13px;line-height:1.5;color:var(--app-text,#626262);margin-top:12px}.auth-card .application-tagline{margin-bottom:20px}
