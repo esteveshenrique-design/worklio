@@ -1,4 +1,8 @@
 node_modules
-.git
+.test-temp
+.test-render
 data
-*.zip
+.env
+.env.*
+!.env.example
+.git

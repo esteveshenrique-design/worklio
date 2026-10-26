@@ -2,3 +2,7 @@ node_modules/
 dist/
 data/
 .env
+.test-temp/
+.test-render/
+.env.*
+!.env.example

@@ -10,18 +10,23 @@
     "build": "vite build",
     "start": "node server.mjs",
     "test": "node --test tests/*.test.mjs",
-    "pretest": "node node_modules/esbuild/bin/esbuild src/App.tsx --bundle --platform=node --format=esm --jsx=automatic --packages=external --outfile=.test-render/App.mjs && node node_modules/esbuild/bin/esbuild src/views/*.tsx --bundle --platform=node --format=esm --jsx=automatic --packages=external --outdir=.test-render/views --out-extension:.js=.mjs && node node_modules/esbuild/bin/esbuild src/components/*.tsx src/quoteTotal.ts src/quoteGroups.ts src/quoteClone.ts --bundle --platform=node --format=esm --jsx=automatic --packages=external --outdir=.test-render/components --out-extension:.js=.mjs"
+    "pretest": "esbuild src/App.tsx --bundle --platform=node --format=esm --jsx=automatic --packages=external --outfile=.test-render/App.mjs && esbuild src/views/*.tsx --bundle --platform=node --format=esm --jsx=automatic --packages=external --outdir=.test-render/views --out-extension:.js=.mjs && esbuild src/components/*.tsx src/quoteTotal.ts src/quoteGroups.ts src/quoteClone.ts --bundle --platform=node --format=esm --jsx=automatic --packages=external --outdir=.test-render/components --out-extension:.js=.mjs",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:import:sqlite": "node scripts/import-sqlite.mjs",
+    "test:postgres": "node --test tests/postgres.test.mjs"
   },
   "dependencies": {
+    "lucide-react": "0.468.0",
+    "pg": "^8.16.3",
     "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "lucide-react": "0.468.0"
+    "react-dom": "19.2.0"
   },
   "devDependencies": {
-    "vite": "7.1.7",
+    "@electric-sql/pglite": "^0.3.14",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
     "@vitejs/plugin-react": "5.0.4",
     "typescript": "5.9.3",
-    "@types/react": "19.2.0",
-    "@types/react-dom": "19.2.0"
+    "vite": "7.1.7"
   }
 }
