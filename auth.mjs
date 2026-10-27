@@ -43,9 +43,9 @@ export async function initAuth(db,{dataDir,origin,secure,setupToken}){
  const b=await read(req),settings=organizationSettings(b.settings),fields=identity(b.admin||{});const password=await hash(b.admin.password);
  const fresh=(await current(req));if(!fresh?.is_super)throw failure(403,'Super administrator access required.');writeGuard(req,fresh);
  if((await db.prepare('SELECT id FROM users WHERE email=?').get(fields.email)))throw failure(409,'An account with this email already exists.');
- const id=organizationId(),adminId=organizationId(),csrf=randomBytes(32).toString('hex');
- await db.transaction(async()=>{(await db.prepare('INSERT INTO organizations VALUES(?,?,1,?,?)').run(id,settings.business,JSON.stringify(settings),Date.now()));(await db.prepare('INSERT INTO users(id,name,email,password,role,enabled,created,organization_id,is_super) VALUES(?,?,?,?,?,1,?,?,0)').run(adminId,fields.name,fields.email,password,'admin',Date.now(),id));(await db.prepare('UPDATE sessions SET organization_id=?,csrf=? WHERE token=?').run(id,csrf,fresh.token));});
- return json(res,201,{organization:{id,name:settings.business,enabled:true},user:(await publicUser(fresh,id)),csrf});
+ const id=organizationId(),adminId=organizationId(),activate=b.activate!==false,csrf=activate?randomBytes(32).toString('hex'):fresh.csrf;
+ await db.transaction(async()=>{(await db.prepare('INSERT INTO organizations VALUES(?,?,1,?,?)').run(id,settings.business,JSON.stringify(settings),Date.now()));(await db.prepare('INSERT INTO users(id,name,email,password,role,enabled,created,organization_id,is_super) VALUES(?,?,?,?,?,1,?,?,0)').run(adminId,fields.name,fields.email,password,'admin',Date.now(),id));if(activate)(await db.prepare('UPDATE sessions SET organization_id=?,csrf=? WHERE token=?').run(id,csrf,fresh.token));});
+ return json(res,201,{organization:{id,name:settings.business,enabled:true},user:(await publicUser(fresh,activate?id:fresh.active_organization_id)),csrf});
  }
  if(/^\/api\/organizations\/[a-f0-9]{32}(\/switch)?$/.test(path)||path==='/api/organizations/owner/switch'||path==='/api/organizations/owner'){
  const id=path.split('/')[3],b=await read(req),fresh=(await current(req));if(!fresh?.is_super)throw failure(403,'Super administrator access required.');writeGuard(req,fresh);const org=(await db.prepare('SELECT * FROM organizations WHERE id=?').get(id));if(!org)throw failure(404,'Organization not found.');

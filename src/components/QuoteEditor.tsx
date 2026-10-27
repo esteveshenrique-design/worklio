@@ -5,8 +5,8 @@ import {reusableGroups,addQuoteGroup} from '../quoteGroups';
 import {Plus,X} from 'lucide-react';
 import type {Quote,Customer,Translate,Line,ImportReview} from '../types';
 import {quoteBreakdown,lineVat,quoteSections} from '../quoteTotal';
-type Props={importReview?:ImportReview|null;quotes?:Quote[];quote:Quote;setQuote:(quote:Quote)=>void;customers:Customer[];t:Translate;eur:(value:number)=>string;busy:boolean;ready:boolean;onSave:(quote:Quote)=>Promise<void>;};
-export default function QuoteEditor({importReview,quotes=[],quote,setQuote,customers,t,eur,busy,ready,onSave}:Props){
+type Props={importReview?:ImportReview|null;quotes?:Quote[];quote:Quote;setQuote:(quote:Quote)=>void;customers:Customer[];t:Translate;eur:(value:number)=>string;busy:boolean;ready:boolean;onSave:(quote:Quote)=>Promise<void>;onClose?:()=>void|Promise<void>;};
+export default function QuoteEditor({importReview,quotes=[],quote,setQuote,customers,t,eur,busy,ready,onSave,onClose}:Props){
  const savedGroups=reusableGroups(quotes,quote),units=reusableUnits(quotes,quote);
  function selectGroup(index:number,value:string){if(value.startsWith('__saved__')){setQuote(addQuoteGroup(quote,value.slice(9),index,crypto.randomUUID()));return;}updateLine(index,{groupId:value});}
  const groups=quote.groups||[],breakdown=quoteBreakdown(quote);
@@ -24,5 +24,5 @@ export default function QuoteEditor({importReview,quotes=[],quote,setQuote,custo
  <div className="form-group-footer"><button type="button" className="textbutton" onClick={()=>setQuote({...quote,lines:[...quote.lines,{description:'',qty:1,price:0,vat:quote.tax,groupId:section.id}]})}><Plus size={16}/>{t('Add line item')}</button><span>{t('Group subtotal')}: {eur(quoteBreakdown({...quote,lines:section.lines}).subtotal)}</span></div></section>)}
  <label className="default-vat">{t('Default VAT for new items')}<input type="number" required min="0" max="100" step="any" value={quote.tax} onChange={e=>setQuote({...quote,lines:quote.lines.map(l=>({...l,vat:lineVat(l,quote)})),tax:Number(e.target.value)})}/></label>
  <div className="doctotals"><p>{t('Subtotal')}<b>{eur(breakdown.subtotal)}</b></p>{breakdown.rates.map(row=><p key={row.rate}>{t('VAT')} ({row.rate}%)<b>{eur(row.tax)}</b></p>)}<h3>{t('Total including tax')}<b>{eur(breakdown.total)}</b></h3></div>
- </div><div className="form-fixed-actions"><div className="editor-summary"><button type="button" className="textbutton" onClick={()=>setQuote({...quote,lines:[...quote.lines,{description:'',qty:1,price:0,vat:quote.tax}]})}><Plus size={16}/>{t('Add line item')}</button><span>{t('Total including tax')}: <b>{eur(breakdown.total)}</b></span></div><button className="primary full" disabled={busy||!ready}>{busy?t('Saving…'):t('Save quote')}</button></div></form>;
+ </div><div className="form-fixed-actions"><div className="editor-summary"><button type="button" className="textbutton" onClick={()=>setQuote({...quote,lines:[...quote.lines,{description:'',qty:1,price:0,vat:quote.tax}]})}><Plus size={16}/>{t('Add line item')}</button><span>{t('Total including tax')}: <b>{eur(breakdown.total)}</b></span></div><button className="primary full" disabled={busy||!ready}>{busy?t('Saving…'):t('Save quote')}</button>{onClose&&<button type="button" className="full" disabled={busy} onClick={onClose}>{t('Close')}</button>}</div></form>;
 }

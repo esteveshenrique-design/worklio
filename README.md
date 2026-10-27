@@ -162,3 +162,9 @@ A navy construction/checkmark icon identifies Worklio in the sidebar, sign-in sc
 
 ## Worklio branding update
 French tagline: **Devis, chantiers et factures pour le bâtiment**. The selected language updates the tagline on the sign-in screen, sidebar, footer and browser metadata. Existing PostgreSQL data, SQLite filename, browser preference keys and authentication cookies retain their identifiers so upgrading does not reset records or sessions. Keep the same DATABASE_URL when deploying.
+
+## Quote editor saves
+Save quote persists changes and leaves the form open for continued editing. Repeated saves update the same quote. Press Close (the labeled action or top-right X) to exit; closing reloads the workspace so lists reflect the latest saved data. Close is disabled while a save is running. Unsaved edits are discarded when you close.
+
+## Save without closing
+Quote, customer, job, invoice and user forms remain open after successful saves. Close explicitly to exit and refresh the relevant list. Newly created invoices/users become the current editing record so later saves update rather than duplicate them. Organization creation stays open as a saved read-only form; Close refreshes organizations and activates the new organization. Settings already stay open. Password changes and self-account security changes retain required session sign-out behavior.

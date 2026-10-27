@@ -81,6 +81,13 @@ test('PostgreSQL workflow, atomic writes, import and persistence across app rest
   await t.test('application restart preserves records, invoices, payments, organization and session',async()=>{
    await stop();await boot('restart');assert.deepEqual(await(await request('/api/workspace')).json(),current);const auth=await(await request('/api/auth/status')).json();assert.equal(auth.user.email,'platform@example.com');assert.equal(auth.csrf,csrf);assert.equal((await request('/health')).status,200);
   });
+  await t.test('organization creation can defer activation until the form is closed',async()=>{
+   const before=await(await request('/api/auth/status')).json();
+   const response=await request('/api/organizations','POST',{activate:false,settings:{business:'Deferred organization'},admin:{name:'Deferred admin',email:'deferred@example.com',password:'Deferred-organization-password-123'}});
+   assert.equal(response.status,201,await response.clone().text());const result=await response.json();assert.notEqual(result.organization.id,organization);assert.equal(result.user.organizationId,organization);assert.equal(result.csrf,csrf);
+   const after=await(await request('/api/auth/status')).json();assert.equal(after.user.organizationId,before.user.organizationId);assert.equal(after.csrf,before.csrf);
+   assert.deepEqual(await(await request('/api/workspace')).json(),current);
+  });
   await t.test('failed login counters remain committed',async()=>{
    for(let i=0;i<2;i++)assert.equal((await request('/api/auth/login','POST',{email:'missing@example.com',password:'Incorrect-password-123'})).status,401);
    assert.ok((await database.prepare("SELECT count FROM login_limits WHERE key LIKE 'email:%'").get()).count>=2);

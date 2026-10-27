@@ -89,3 +89,5 @@ nav button{cursor:pointer}nav button:hover,nav button:focus-visible{background:v
 .application-icon{display:block;flex-shrink:0;object-fit:contain}.auth-brand{display:flex;align-items:center;gap:12px}
 
 .application-tagline{font-size:13px;line-height:1.5;color:var(--app-text,#626262);margin-top:12px}.auth-card .application-tagline{margin-bottom:20px}
+
+.organization-form-fields{border:0;padding:0;margin:0;min-width:0}
